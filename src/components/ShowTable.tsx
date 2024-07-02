@@ -17,6 +17,7 @@ import {
   initializeFilters,
   onGlobalFilterChange,
 } from "../utils/filterUtils";
+import TableHeader from "./TableToolbar";
 
 // interface DataItem {
 //   DataType: string;
@@ -209,7 +210,17 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
   const renderHeader = () => {
     return (
       <>
-        <div className="flex justify-content-between">
+        <TableHeader
+          table={table}
+          globalFilterValue={globalFilterValue}
+          onGlobalFilterChange={(e) =>
+            onGlobalFilterChange(e, filters, setFilters, setGlobalFilterValue)
+          }
+          clearFilters={() =>
+            clearFilters(filters, setFilters, setGlobalFilterValue)
+          }
+        ></TableHeader>
+        {/* <div className="flex justify-content-between">
           <Button
             type="button"
             icon="pi pi-filter-slash"
@@ -223,8 +234,8 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
             <h2 className="text-center text-3xl">{table}</h2>
           </div>
           {/* <div className="flex gap-2"> */}
-          <div className="p-input-icon-left">
-            <IconField iconPosition="left">
+        {/* <div className="p-input-icon-left"> */}
+        {/* <IconField iconPosition="left">
               <InputIcon className="pi pi-search" />
               <InputText
                 value={globalFilterValue}
@@ -239,9 +250,9 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
                 placeholder="Keyword Search"
               />
             </IconField>
-          </div>
-          {/* <div> */}
-          {/* <Button
+          </div> */}
+        {/* <div> */}
+        {/* <Button
                 type="button"
                 icon="pi pi-file"
                 rounded
@@ -250,8 +261,8 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
                 tooltipOptions={{ position: "bottom" }}
               />
             </div> */}
-          {/* </div> */}
-        </div>
+        {/* </div> */}
+        {/* </div> */}
       </>
     );
   };
