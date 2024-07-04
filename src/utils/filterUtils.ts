@@ -1,15 +1,32 @@
 import { FilterMatchMode, FilterOperator } from "primereact/api";
 import { DataTableFilterMeta } from "primereact/datatable";
 import { DataObject } from "../model/types";
-export const initializeFilters = (data: DataObject): DataTableFilterMeta => {
+export interface ColumnType {
+  Name: string;
+  Default: string;
+  Nullable: boolean;
+  DataType: string;
+}
+
+export const initializeFilters = (
+  data: DataObject,
+  schemaData: ColumnType[]
+): DataTableFilterMeta => {
   const columns = Object.keys(data);
   const initialFilters: DataTableFilterMeta = {};
 
-  columns.forEach((col) => {
-    initialFilters[col] = {
-      operator: FilterOperator.AND,
-      constraints: [{ value: null, matchMode: FilterMatchMode.STARTS_WITH }],
-    };
+  schemaData.forEach((col) => {
+    if (col.DataType == "timestamp" || col.DataType == "timestamptz") {
+      initialFilters[col.Name] = {
+        operator: FilterOperator.AND,
+        constraints: [{ value: null, matchMode: FilterMatchMode.DATE_IS }],
+      };
+    } else {
+      initialFilters[col.Name] = {
+        operator: FilterOperator.AND,
+        constraints: [{ value: null, matchMode: FilterMatchMode.STARTS_WITH }],
+      };
+    }
   });
 
   return initialFilters;

@@ -1,15 +1,10 @@
-import { Column } from "primereact/column";
+import { Column, ColumnFilterElementTemplateOptions } from "primereact/column";
 import { DataTable, DataTableFilterMeta } from "primereact/datatable";
 import React, { useEffect, useRef, useState } from "react";
-import { FilterMatchMode, FilterOperator } from "primereact/api";
-import { InputText } from "primereact/inputtext";
+import { FilterMatchMode } from "primereact/api";
 import { Button } from "primereact/button";
-import { IconField } from "primereact/iconfield";
-import { InputIcon } from "primereact/inputicon";
-import { Tooltip } from "primereact/tooltip";
 import { Toolbar } from "primereact/toolbar";
 import { Toast } from "primereact/toast";
-import { Dialog } from "primereact/dialog";
 import useFetchTableData from "../hooks/useFetchTableData";
 import { transformData } from "../utils/tranformDataUtils";
 import {
@@ -18,14 +13,12 @@ import {
   onGlobalFilterChange,
 } from "../utils/filterUtils";
 import TableHeader from "./TableToolbar";
-
-// interface DataItem {
-//   DataType: string;
-//   StrValue: string;
-// }
-// interface DataObject {
-//   [key: string]: DataItem[];
-// }
+import { useSingleDelete } from "../hooks/useSingleDelete";
+import { useMultipleDelete } from "../hooks/useMultipleDelete";
+import DeleteRowDialog from "./DeleteRowDialog";
+import DeleteRowsDialog from "./DeleteRowsDialog";
+import useFetchTableSchema from "../hooks/useFetchTableSchema";
+import { Calendar } from "primereact/calendar";
 
 const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
   const [defaultFilters, setDefaultFilters] = useState<DataTableFilterMeta>({
@@ -38,63 +31,36 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
   const [selectedRows, setSelectedRows] = useState<Record<string, string>[]>(
     []
   );
-  const [row, setRow] = useState<Record<string, string> | null>(null);
-  const [deleteRowDialog, setDeleteRowDialog] = useState<boolean>(false);
-  const [deleteRowsDialog, setDeleteRowsDialog] = useState<boolean>(false);
   const toast = useRef<Toast>(null);
   const dt = useRef<DataTable<Record<string, string>[]>>(null);
   const { data, loading } = useFetchTableData(schema, table);
-
-  //data tranformation
-  // const transformData = (data: DataObject): Record<string, string>[] => {
-  //   const result: Record<string, string>[] = [];
-  //   const columns = Object.keys(data);
-  //   const initialFilters: DataTableFilterMeta = {};
-
-  //   columns.forEach((col) => {
-  //     initialFilters[col] = {
-  //       operator: FilterOperator.AND,
-  //       constraints: [{ value: null, matchMode: FilterMatchMode.STARTS_WITH }],
-  //     };
-  //   });
-  //   setFilters((prevFilters) => ({
-  //     ...prevFilters,
-  //     ...initialFilters,
-  //   }));
-  //   setDefaultFilters((prevFilters) => ({
-  //     ...prevFilters,
-  //     ...initialFilters,
-  //   }));
-  //   setColumns(columns);
-  //   const itemCount = data[columns[0]].length;
-  //   for (let i = 0; i < itemCount; i++) {
-  //     const row: Record<string, string> = {};
-  //     columns.forEach((column) => {
-  //       row[column] = data[column][i]["StrValue"];
-  //     });
-  //     result.push(row);
-  //   }
-
-  //   return result;
-  // };
-
+  const { schemaData, schemaLoading } = useFetchTableSchema(schema, table);
+  //single row delete
+  const {
+    // row,
+    deleteRowDialog,
+    confirmDeleteRow,
+    hideDeleteRowDialog,
+    deleteRow,
+  } = useSingleDelete(tableRows, setTableRows, toast);
+  //multiple rows delete
+  const {
+    deleteRowsDialog,
+    confirmDeleteSelected,
+    hideDeleteRowsDialog,
+    deleteSelectedRows,
+  } = useMultipleDelete(
+    tableRows,
+    setTableRows,
+    selectedRows,
+    setSelectedRows,
+    toast
+  );
   //initially getting data
-  // useEffect(() => {
-  //   const getTableRows = async () => {
-  //     const response = await fetch(
-  //       `http://127.0.0.1:42069/table/${schema}/${table}/rows`
-  //     );
-  //     const data = await response.json();
-  //     const tableData = data.Data;
-  //     const tranformedTableData = transformData(tableData);
-  //     setTableRows(tranformedTableData);
-  //   };
-  //   getTableRows();
-  // }, [schema, table]);
   useEffect(() => {
-    if (data) {
+    if (data && schemaData) {
       const transformedData = transformData(data);
-      const initialFilters = initializeFilters(data);
+      const initialFilters = initializeFilters(data, schemaData);
       setTableRows(transformedData);
       setColumns(Object.keys(data));
       setFilters((prevFilters) => ({
@@ -107,105 +73,12 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
       }));
     }
   }, [data]);
-  //Filter Stuff
-  // const onGlobalFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  //   const value = e.target.value;
-  //   let _filters = { ...filters };
-  //   //@ts-ignore
-  //   _filters["global"].value = value;
-  //   setFilters(_filters);
-  //   setGlobalFilterValue(value);
-  // };
-  // const clearFilters = () => {
-  //   let _filters = { ...filters };
-  //   //@ts-ignore
-  //   _filters["global"].value = "";
-  //   setFilters(_filters);
-  //   setGlobalFilterValue("");
-  // };
 
   //Exporting csv
   const exportCSV = () => {
     dt.current?.exportCSV();
   };
 
-  //Single Row Delete
-  const hideDeleteRowDialog = () => {
-    setDeleteRowDialog(false);
-  };
-
-  const confirmDeleteRow = (row: Record<string, string>) => {
-    setRow(row);
-    setDeleteRowDialog(true);
-  };
-
-  const deleteRow = () => {
-    let _tableRows = tableRows.filter((val) => val.id !== row?.id);
-
-    setTableRows(_tableRows);
-    setDeleteRowDialog(false);
-    setRow(null);
-    toast.current?.show({
-      severity: "success",
-      summary: "Successful",
-      detail: "Row Deleted",
-      life: 3000,
-    });
-  };
-  const deleteRowDialogFooter = (
-    <React.Fragment>
-      <Button
-        label="No"
-        icon="pi pi-times"
-        outlined
-        onClick={hideDeleteRowDialog}
-      />
-      <Button
-        label="Yes"
-        icon="pi pi-check"
-        severity="danger"
-        onClick={deleteRow}
-      />
-    </React.Fragment>
-  );
-
-  //Multiple Rows Delete
-  const confirmDeleteSelected = () => {
-    setDeleteRowsDialog(true);
-  };
-
-  const deleteSelectedProducts = () => {
-    let _tableRows = tableRows.filter((val) => !selectedRows.includes(val));
-
-    setTableRows(_tableRows);
-    setDeleteRowsDialog(false);
-    setSelectedRows([]);
-    toast.current?.show({
-      severity: "success",
-      summary: "Successful",
-      detail: "Rows Deleted",
-      life: 3000,
-    });
-  };
-  const hideDeleteRowsDialog = () => {
-    setDeleteRowsDialog(false);
-  };
-  const deleteRowsDialogFooter = (
-    <React.Fragment>
-      <Button
-        label="No"
-        icon="pi pi-times"
-        outlined
-        onClick={hideDeleteRowsDialog}
-      />
-      <Button
-        label="Yes"
-        icon="pi pi-check"
-        severity="danger"
-        onClick={deleteSelectedProducts}
-      />
-    </React.Fragment>
-  );
   //Header for datatable
   const renderHeader = () => {
     return (
@@ -220,49 +93,6 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
             clearFilters(filters, setFilters, setGlobalFilterValue)
           }
         ></TableHeader>
-        {/* <div className="flex justify-content-between">
-          <Button
-            type="button"
-            icon="pi pi-filter-slash"
-            label="Clear"
-            outlined
-            onClick={() =>
-              clearFilters(filters, setFilters, setGlobalFilterValue)
-            }
-          />
-          <div>
-            <h2 className="text-center text-3xl">{table}</h2>
-          </div>
-          {/* <div className="flex gap-2"> */}
-        {/* <div className="p-input-icon-left"> */}
-        {/* <IconField iconPosition="left">
-              <InputIcon className="pi pi-search" />
-              <InputText
-                value={globalFilterValue}
-                onChange={(e) =>
-                  onGlobalFilterChange(
-                    e,
-                    filters,
-                    setFilters,
-                    setGlobalFilterValue
-                  )
-                }
-                placeholder="Keyword Search"
-              />
-            </IconField>
-          </div> */}
-        {/* <div> */}
-        {/* <Button
-                type="button"
-                icon="pi pi-file"
-                rounded
-                onClick={() => exportCSV(false)}
-                tooltip="CSV"
-                tooltipOptions={{ position: "bottom" }}
-              />
-            </div> */}
-        {/* </div> */}
-        {/* </div> */}
       </>
     );
   };
@@ -319,6 +149,37 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
       </React.Fragment>
     );
   };
+  const formatDate = (value: string) => {
+    const trimmedDateString = value.split(" ")[0]; // Remove the timezone information
+
+    const dateObject = new Date(trimmedDateString);
+    return dateObject.toLocaleDateString("en-US", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  };
+  const dateBodyTemplate = (
+    rowData: Record<string, string>,
+    colName: string
+  ) => {
+    return formatDate(rowData[colName]);
+  };
+
+  const dateFilterTemplate = (options: ColumnFilterElementTemplateOptions) => {
+    return (
+      <Calendar
+        value={options.value}
+        onChange={(e) => {
+          const selectedDate = e.value as Date | null;
+          options.filterCallback(selectedDate, options.index);
+        }}
+        dateFormat="mm/dd/yy"
+        placeholder="mm/dd/yyyy"
+        mask="99/99/9999"
+      />
+    );
+  };
   return (
     <div>
       <Toast ref={toast} />
@@ -352,17 +213,40 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
           emptyMessage="No data found."
         >
           <Column selectionMode="multiple" exportable={false}></Column>
-          {columns.map((col) => (
-            <Column
-              key={col}
-              field={col.toLocaleLowerCase()}
-              header={col}
-              sortable
-              filter
-              filterPlaceholder={`Search by ${col}`}
-              style={{ width: "25%" }}
-            />
-          ))}
+          {schemaData.map((col) => {
+            if (col.DataType == "timestamp" || col.DataType == "timestamptz") {
+              return (
+                <Column
+                  key={col.Name}
+                  field={col.Name.toLocaleLowerCase()}
+                  header={col.Name}
+                  filterField={col.Name}
+                  dataType="date"
+                  sortable
+                  filter
+                  // filterPlaceholder={`Search by ${col}`}
+                  style={{ width: "25%" }}
+                  body={(rowData: Record<string, string>) =>
+                    dateBodyTemplate(rowData, col.Name)
+                  }
+                  // filter
+                  filterElement={dateFilterTemplate}
+                />
+              );
+            } else {
+              return (
+                <Column
+                  key={col.Name}
+                  field={col.Name.toLocaleLowerCase()}
+                  header={col.Name}
+                  sortable
+                  filter
+                  filterPlaceholder={`Search by ${col.Name}`}
+                  style={{ width: "25%" }}
+                />
+              );
+            }
+          })}
           <Column
             body={actionBodyTemplate}
             exportable={false}
@@ -370,42 +254,16 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
           ></Column>
         </DataTable>
       </div>
-      <Dialog
+      <DeleteRowDialog
         visible={deleteRowDialog}
-        style={{ width: "32rem" }}
-        breakpoints={{ "960px": "75vw", "641px": "90vw" }}
-        header="Confirm"
-        modal
-        footer={deleteRowDialogFooter}
         onHide={hideDeleteRowDialog}
-      >
-        <div className="confirmation-content">
-          <i
-            className="pi pi-exclamation-triangle mr-3"
-            style={{ fontSize: "2rem" }}
-          />
-          {row && <span>Are you sure you want to delete this row?</span>}
-        </div>
-      </Dialog>
-      <Dialog
+        onDelete={deleteRow}
+      />
+      <DeleteRowsDialog
         visible={deleteRowsDialog}
-        style={{ width: "32rem" }}
-        breakpoints={{ "960px": "75vw", "641px": "90vw" }}
-        header="Confirm"
-        modal
-        footer={deleteRowsDialogFooter}
         onHide={hideDeleteRowsDialog}
-      >
-        <div className="confirmation-content">
-          <i
-            className="pi pi-exclamation-triangle mr-3"
-            style={{ fontSize: "2rem" }}
-          />
-          {selectedRows && (
-            <span>Are you sure you want to delete the selected rows?</span>
-          )}
-        </div>
-      </Dialog>
+        onDelete={deleteSelectedRows}
+      />
     </div>
   );
 };
