@@ -1,5 +1,13 @@
-import { Column, ColumnFilterElementTemplateOptions } from "primereact/column";
-import { DataTable, DataTableFilterMeta } from "primereact/datatable";
+import {
+  Column,
+  ColumnEditorOptions,
+  ColumnFilterElementTemplateOptions,
+} from "primereact/column";
+import {
+  DataTable,
+  DataTableFilterMeta,
+  DataTableRowEditCompleteEvent,
+} from "primereact/datatable";
 import React, { useEffect, useRef, useState } from "react";
 import { FilterMatchMode } from "primereact/api";
 import { Button } from "primereact/button";
@@ -19,15 +27,15 @@ import DeleteRowDialog from "./DeleteRowDialog";
 import DeleteRowsDialog from "./DeleteRowsDialog";
 import useFetchTableSchema from "../hooks/useFetchTableSchema";
 import { Calendar } from "primereact/calendar";
+import { InputText } from "primereact/inputtext";
+import { fetchTableData } from "../utils/fetchTableData";
+import { DataObject } from "../model/types";
 
 const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
   const [defaultFilters, setDefaultFilters] = useState<DataTableFilterMeta>({
     global: { value: null, matchMode: FilterMatchMode.CONTAINS },
   });
   const [tableRows, setTableRows] = useState<Record<string, string>[]>([]);
-  const [columns, setColumns] = useState<string[]>([]);
-  const [filters, setFilters] = useState<DataTableFilterMeta>(defaultFilters);
-  const [globalFilterValue, setGlobalFilterValue] = useState<string>("");
   const [selectedRows, setSelectedRows] = useState<Record<string, string>[]>(
     []
   );
@@ -35,6 +43,8 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
   const dt = useRef<DataTable<Record<string, string>[]>>(null);
   const { data, loading } = useFetchTableData(schema, table);
   const { schemaData, schemaLoading } = useFetchTableSchema(schema, table);
+  const [queried, setQueried] = useState<Record<string, string>[]>([]);
+  const [show, setShow] = useState<boolean>(false);
   //single row delete
   const {
     // row,
@@ -57,21 +67,36 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
     toast
   );
   //initially getting data
+  // useEffect(() => {
+  //   if (data && schemaData) {
+  //     const transformedData = transformData(data);
+  //     const initialFilters = initializeFilters(data, schemaData);
+  //     setTableRows(transformedData);
+  //     // setColumns(Object.keys(data));
+  //     // setFilters((prevFilters) => ({
+  //     //   ...prevFilters,
+  //     //   ...initialFilters,
+  //     // }));
+  //     setDefaultFilters((prevFilters) => ({
+  //       ...prevFilters,
+  //       ...initialFilters,
+  //     }));
+  //   }
+  // }, [data]);
   useEffect(() => {
-    if (data && schemaData) {
-      const transformedData = transformData(data);
-      const initialFilters = initializeFilters(data, schemaData);
-      setTableRows(transformedData);
-      setColumns(Object.keys(data));
-      setFilters((prevFilters) => ({
-        ...prevFilters,
-        ...initialFilters,
-      }));
-      setDefaultFilters((prevFilters) => ({
-        ...prevFilters,
-        ...initialFilters,
-      }));
-    }
+    const data = fetchTableData(schema, table);
+    const transformedData = transformData(data);
+    const initialFilters = initializeFilters(data, schemaData);
+    setTableRows(transformedData);
+    // setColumns(Object.keys(data));
+    // setFilters((prevFilters) => ({
+    //   ...prevFilters,
+    //   ...initialFilters,
+    // }));
+    setDefaultFilters((prevFilters) => ({
+      ...prevFilters,
+      ...initialFilters,
+    }));
   }, [data]);
 
   //Exporting csv
@@ -85,13 +110,9 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
       <>
         <TableHeader
           table={table}
-          globalFilterValue={globalFilterValue}
-          onGlobalFilterChange={(e) =>
-            onGlobalFilterChange(e, filters, setFilters, setGlobalFilterValue)
-          }
-          clearFilters={() =>
-            clearFilters(filters, setFilters, setGlobalFilterValue)
-          }
+          schema={schema}
+          setQueried={setQueried}
+          setShow={setShow}
         ></TableHeader>
       </>
     );
@@ -132,13 +153,13 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
   const actionBodyTemplate = (rowData: Record<string, string>) => {
     return (
       <React.Fragment>
-        <Button
+        {/* <Button
           icon="pi pi-pencil"
           rounded
           outlined
           className="mr-2"
-          // onClick={() => editProduct(rowData)}
-        />
+          // onClick={}
+        /> */}
         <Button
           icon="pi pi-trash"
           rounded
@@ -166,20 +187,40 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
     return formatDate(rowData[colName]);
   };
 
-  const dateFilterTemplate = (options: ColumnFilterElementTemplateOptions) => {
+  const onRowEditComplete = (e: DataTableRowEditCompleteEvent) => {
+    let _tableRows = [...tableRows];
+    let { newData, index } = e;
+
+    _tableRows[index] = newData as Record<string, string>;
+
+    setTableRows(_tableRows);
+  };
+
+  const textEditor = (options: ColumnEditorOptions) => {
     return (
-      <Calendar
+      <InputText
+        type="text"
         value={options.value}
-        onChange={(e) => {
-          const selectedDate = e.value as Date | null;
-          options.filterCallback(selectedDate, options.index);
-        }}
-        dateFormat="mm/dd/yy"
-        placeholder="mm/dd/yyyy"
-        mask="99/99/9999"
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+          options.editorCallback!(e.target.value)
+        }
       />
     );
   };
+  // const dateFilterTemplate = (options: ColumnFilterElementTemplateOptions) => {
+  //   return (
+  //     <Calendar
+  //       value={options.value}
+  //       onChange={(e) => {
+  //         const selectedDate = e.value as Date | null;
+  //         options.filterCallback(selectedDate, options.index);
+  //       }}
+  //       dateFormat="mm/dd/yy"
+  //       placeholder="mm/dd/yyyy"
+  //       mask="99/99/9999"
+  //     />
+  //   );
+  // };
   return (
     <div>
       <Toast ref={toast} />
@@ -191,7 +232,7 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
         ></Toolbar>
         <DataTable
           ref={dt}
-          value={tableRows}
+          value={!show ? tableRows : queried}
           dataKey="id"
           className="p-2 w-full"
           // tableStyle={{ minWidth: "50rem" }}
@@ -199,10 +240,8 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
           showGridlines
           rows={5}
           header={header}
-          filters={filters}
           removableSort
           resizableColumns
-          globalFilterFields={columns}
           selection={selectedRows}
           onSelectionChange={(e) => {
             if (Array.isArray(e.value)) {
@@ -210,6 +249,8 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
             }
           }}
           selectionMode="multiple"
+          editMode="row"
+          onRowEditComplete={onRowEditComplete}
           emptyMessage="No data found."
         >
           <Column selectionMode="multiple" exportable={false}></Column>
@@ -220,17 +261,14 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
                   key={col.Name}
                   field={col.Name.toLocaleLowerCase()}
                   header={col.Name}
-                  filterField={col.Name}
                   dataType="date"
-                  sortable
-                  filter
                   // filterPlaceholder={`Search by ${col}`}
                   style={{ width: "25%" }}
-                  body={(rowData: Record<string, string>) =>
-                    dateBodyTemplate(rowData, col.Name)
-                  }
+                  editor={(options) => textEditor(options)}
+                  // body={(rowData: Record<string, string>) =>
+                  //   dateBodyTemplate(rowData, col.Name)
+                  // }
                   // filter
-                  filterElement={dateFilterTemplate}
                 />
               );
             } else {
@@ -239,14 +277,18 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
                   key={col.Name}
                   field={col.Name.toLocaleLowerCase()}
                   header={col.Name}
-                  sortable
-                  filter
-                  filterPlaceholder={`Search by ${col.Name}`}
+                  editor={(options) => textEditor(options)}
                   style={{ width: "25%" }}
                 />
               );
             }
           })}
+          <Column
+            // body={actionBodyTemplate}
+            rowEditor={true}
+            exportable={false}
+            style={{ minWidth: "12rem" }}
+          ></Column>
           <Column
             body={actionBodyTemplate}
             exportable={false}
