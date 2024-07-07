@@ -1,5 +1,3 @@
-import { DataObject } from "../model/types";
-
 export const fetchTableData = async (
   schema: string,
   table: string,

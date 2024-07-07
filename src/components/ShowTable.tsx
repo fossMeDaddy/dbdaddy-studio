@@ -30,6 +30,8 @@ import { Calendar } from "primereact/calendar";
 import { InputText } from "primereact/inputtext";
 import { fetchTableData } from "../utils/fetchTableData";
 import { DataObject } from "../model/types";
+import { useQuery } from "react-query";
+import { Skeleton } from "primereact/skeleton";
 
 const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
   const [defaultFilters, setDefaultFilters] = useState<DataTableFilterMeta>({
@@ -41,7 +43,7 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
   );
   const toast = useRef<Toast>(null);
   const dt = useRef<DataTable<Record<string, string>[]>>(null);
-  const { data, loading } = useFetchTableData(schema, table);
+  // const { data, loading } = useFetchTableData(schema, table);
   const { schemaData, schemaLoading } = useFetchTableSchema(schema, table);
   const [queried, setQueried] = useState<Record<string, string>[]>([]);
   const [show, setShow] = useState<boolean>(false);
@@ -83,21 +85,42 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
   //     }));
   //   }
   // }, [data]);
-  useEffect(() => {
-    const data = fetchTableData(schema, table);
-    const transformedData = transformData(data);
-    const initialFilters = initializeFilters(data, schemaData);
-    setTableRows(transformedData);
-    // setColumns(Object.keys(data));
-    // setFilters((prevFilters) => ({
-    //   ...prevFilters,
-    //   ...initialFilters,
-    // }));
-    setDefaultFilters((prevFilters) => ({
-      ...prevFilters,
-      ...initialFilters,
-    }));
-  }, [data]);
+  const { data, error, isLoading } = useQuery(
+    ["tableData", schema, table],
+    () => fetchTableData(schema, table),
+    {
+      refetchOnWindowFocus: false,
+      enabled: !!schema && !!table,
+      onSuccess: (data) => {
+        const transformedData = transformData(data);
+        console.log("hello");
+        const initialFilters = initializeFilters(data, schemaData);
+        setTableRows(transformedData);
+        setDefaultFilters((prevFilters) => ({
+          ...prevFilters,
+          ...initialFilters,
+        }));
+      }, // only run the query if schema and table are defined
+    }
+  );
+  // useEffect(() => {
+  //   const fetchData = async () => {
+  //     const data = await fetchTableData(schema, table);
+  //     const transformedData = transformData(data);
+  //     const initialFilters = initializeFilters(data, schemaData);
+  //     setTableRows(transformedData);
+  //     // setColumns(Object.keys(data));
+  //     // setFilters((prevFilters) => ({
+  //     //   ...prevFilters,
+  //     //   ...initialFilters,
+  //     // }));
+  //     setDefaultFilters((prevFilters) => ({
+  //       ...prevFilters,
+  //       ...initialFilters,
+  //     }));
+  //   };
+  //   fetchData();
+  // }, [schema, table]);
 
   //Exporting csv
   const exportCSV = () => {
@@ -111,8 +134,7 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
         <TableHeader
           table={table}
           schema={schema}
-          setQueried={setQueried}
-          setShow={setShow}
+          setTableRows={setTableRows}
         ></TableHeader>
       </>
     );
@@ -232,7 +254,7 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
         ></Toolbar>
         <DataTable
           ref={dt}
-          value={!show ? tableRows : queried}
+          value={tableRows}
           dataKey="id"
           className="p-2 w-full"
           // tableStyle={{ minWidth: "50rem" }}
@@ -253,7 +275,11 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
           onRowEditComplete={onRowEditComplete}
           emptyMessage="No data found."
         >
-          <Column selectionMode="multiple" exportable={false}></Column>
+          <Column
+            selectionMode="multiple"
+            exportable={false}
+            body={isLoading ? <Skeleton /> : ""}
+          ></Column>
           {schemaData.map((col) => {
             if (col.DataType == "timestamp" || col.DataType == "timestamptz") {
               return (
@@ -265,6 +291,7 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
                   // filterPlaceholder={`Search by ${col}`}
                   style={{ width: "25%" }}
                   editor={(options) => textEditor(options)}
+                  body={isLoading ? <Skeleton /> : ""}
                   // body={(rowData: Record<string, string>) =>
                   //   dateBodyTemplate(rowData, col.Name)
                   // }
@@ -279,6 +306,7 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
                   header={col.Name}
                   editor={(options) => textEditor(options)}
                   style={{ width: "25%" }}
+                  body={isLoading ? <Skeleton /> : ""}
                 />
               );
             }
@@ -288,11 +316,7 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
             rowEditor={true}
             exportable={false}
             style={{ minWidth: "12rem" }}
-          ></Column>
-          <Column
-            body={actionBodyTemplate}
-            exportable={false}
-            style={{ minWidth: "12rem" }}
+            body={isLoading ? <Skeleton /> : ""}
           ></Column>
         </DataTable>
       </div>

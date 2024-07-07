@@ -2,20 +2,43 @@ import { Button } from "primereact/button";
 import { InputText } from "primereact/inputtext";
 import { useState } from "react";
 import { transformData } from "../utils/tranformDataUtils";
+import { fetchTableData } from "../utils/fetchTableData";
+import { useMutation } from "react-query";
 
 const TableHeader = ({
   table,
   schema,
-  setQueried,
-  setShow,
+  setTableRows,
 }: {
   table: string;
   schema: string;
-  setQueried: React.Dispatch<React.SetStateAction<Record<string, string>[]>>;
-  setShow: React.Dispatch<React.SetStateAction<boolean>>;
+  setTableRows: React.Dispatch<React.SetStateAction<Record<string, string>[]>>;
 }) => {
   const [queryPart, setQueryPart] = useState<string>("");
-
+  const { mutate: runQuery } = useMutation(
+    () => fetchTableData(schema, table, queryPart),
+    {
+      onSuccess: (data) => {
+        const transformedData = transformData(data);
+        setTableRows(transformedData);
+      },
+      onError: (error) => {
+        console.error("Error Fetching Data:", error);
+      },
+    }
+  );
+  const { mutate: resetQuery } = useMutation(
+    () => fetchTableData(schema, table),
+    {
+      onSuccess: (data) => {
+        const transformedData = transformData(data);
+        setTableRows(transformedData);
+      },
+      onError: (error) => {
+        console.error("Error Fetching Data:", error);
+      },
+    }
+  );
   const fetchData = async () => {
     let query = `select * from ${schema}.${table} `;
     if (queryPart.length != 0) {
@@ -42,11 +65,28 @@ const TableHeader = ({
       }
       const responseData = await response.json();
       const transformedData = transformData(responseData.Data);
-      setQueried(transformedData);
-      setShow(true);
+      // setQueried(transformedData);
+      // setShow(true);
     } catch (error) {
       console.error("Error Fetching Data:", error);
     }
+  };
+  const handleClick = async () => {
+    runQuery();
+    // const data = await fetchTableData(schema, table, queryPart);
+    // const transformedData = transformData(data);
+    // setTableRows(transformedData);
+    // setQueried(transformedData);
+    // setShow(true);
+  };
+  const handleReset = async () => {
+    // const data = await fetchTableData(schema, table);
+    // const transformedData = transformData(data);
+    // // setQueried(data);
+    // setTableRows(transformedData);
+    resetQuery();
+    setQueryPart("");
+    // setShow(false);
   };
   return (
     <div className="flex justify-content-between">
@@ -68,17 +108,14 @@ const TableHeader = ({
               label="Run"
               icon="pi pi-check"
               size="small"
-              onClick={fetchData}
+              onClick={handleClick}
             />
             <Button
               label="Reset"
               icon="pi pi-refresh"
               size="small"
-              onClick={() => {
-                setQueried([]);
-                setQueryPart("");
-                setShow(false);
-              }}
+              onClick={handleReset}
+              disabled={!queryPart.length}
             />
           </div>
         </div>
