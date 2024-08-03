@@ -4,11 +4,12 @@ export interface ColumnType {
   Default: string;
   Nullable: boolean;
   DataType: string;
+  IsPrimaryKey: boolean;
 }
 const useFetchTableSchema = (schema: string, table: string) => {
   const [data, setData] = useState<ColumnType[]>([]);
   const [loading, setLoading] = useState(true);
-
+  const [primaryKey, setPrimaryKey] = useState<string>("");
   useEffect(() => {
     const fetchData = async () => {
       const response = await fetch(
@@ -17,12 +18,18 @@ const useFetchTableSchema = (schema: string, table: string) => {
       const result = await response.json();
       setData(result.Data.Columns);
       setLoading(false);
+      const primaryKeyColumn = result.Data.Columns.find(
+        (col: ColumnType) => col.IsPrimaryKey
+      );
+      if (primaryKeyColumn) {
+        setPrimaryKey(primaryKeyColumn.Name);
+      }
     };
 
     fetchData();
   }, [schema, table]);
 
-  return { schemaData: data, schemaLoading: loading };
+  return { schemaData: data, schemaLoading: loading, primaryKey: primaryKey };
 };
 
 export default useFetchTableSchema;

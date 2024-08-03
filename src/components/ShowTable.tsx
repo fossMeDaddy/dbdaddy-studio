@@ -32,6 +32,7 @@ import { fetchTableData } from "../utils/fetchTableData";
 import { DataObject } from "../model/types";
 import { useQuery } from "react-query";
 import { Skeleton } from "primereact/skeleton";
+import { executeQuery } from "../utils/executeQuery";
 
 const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
   const [defaultFilters, setDefaultFilters] = useState<DataTableFilterMeta>({
@@ -44,9 +45,37 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
   const toast = useRef<Toast>(null);
   const dt = useRef<DataTable<Record<string, string>[]>>(null);
   // const { data, loading } = useFetchTableData(schema, table);
-  const { schemaData, schemaLoading } = useFetchTableSchema(schema, table);
+  const { schemaData, schemaLoading, primaryKey } = useFetchTableSchema(
+    schema,
+    table
+  );
+
+  console.log(schemaLoading);
   const [queried, setQueried] = useState<Record<string, string>[]>([]);
   const [show, setShow] = useState<boolean>(false);
+  const dummySchema = [
+    "id",
+    "created_at",
+    "updated_at",
+    "name",
+    "date_of_birth",
+  ];
+  const dummyData: Record<string, string>[] = [
+    {
+      id: "1",
+      created_at: Date.now().toLocaleString(),
+      updated_at: Date.now().toLocaleString(),
+      name: "John",
+      date_of_birth: "22/12/2004",
+    },
+    {
+      id: "2",
+      created_at: Date.now().toLocaleString(),
+      updated_at: Date.now().toLocaleString(),
+      name: "John",
+      date_of_birth: "22/12/2004",
+    },
+  ];
   //single row delete
   const {
     // row,
@@ -66,7 +95,10 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
     setTableRows,
     selectedRows,
     setSelectedRows,
-    toast
+    toast,
+    schema,
+    table,
+    primaryKey
   );
   //initially getting data
   // useEffect(() => {
@@ -209,13 +241,40 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
     return formatDate(rowData[colName]);
   };
 
-  const onRowEditComplete = (e: DataTableRowEditCompleteEvent) => {
+  const onRowEditComplete = async (e: DataTableRowEditCompleteEvent) => {
     let _tableRows = [...tableRows];
     let { newData, index } = e;
-
+    let query = `UPDATE ${schema}.${table} SET `;
+    const keys = Object.keys(newData);
+    keys.forEach((key, ind) => {
+      if (key !== primaryKey && newData[key] != _tableRows[index][key]) {
+        const value = newData[key];
+        const formattedValue = typeof value === "string" ? `'${value}'` : value;
+        query += `"${key}" = ${formattedValue}`;
+        query += ", ";
+      }
+    });
+    query = query.slice(0, query.length - 2);
+    query += ` WHERE ${primaryKey} = '${newData[primaryKey]}'`;
+    console.log(query);
+    const message = await executeQuery(query);
     _tableRows[index] = newData as Record<string, string>;
-
-    setTableRows(_tableRows);
+    if (message == "success") {
+      setTableRows(_tableRows);
+      toast.current?.show({
+        severity: "success",
+        summary: "Successful",
+        detail: "Rows Updated",
+        life: 3000,
+      });
+    } else {
+      toast.current?.show({
+        severity: "error",
+        summary: "Failed",
+        detail: "Failed to update",
+        life: 3000,
+      });
+    }
   };
 
   const textEditor = (options: ColumnEditorOptions) => {
@@ -243,6 +302,9 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
   //     />
   //   );
   // };
+  // {
+  //   primaryKey ? console.log(primaryKey) : "";
+  // }
   return (
     <div>
       <Toast ref={toast} />
@@ -254,7 +316,8 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
         ></Toolbar>
         <DataTable
           ref={dt}
-          value={tableRows}
+          size="small"
+          value={isLoading ? dummyData : tableRows}
           dataKey="id"
           className="p-2 w-full"
           // tableStyle={{ minWidth: "50rem" }}
@@ -280,37 +343,54 @@ const ShowTable = ({ table, schema }: { table: string; schema: string }) => {
             exportable={false}
             body={isLoading ? <Skeleton /> : ""}
           ></Column>
-          {schemaData.map((col) => {
-            if (col.DataType == "timestamp" || col.DataType == "timestamptz") {
-              return (
-                <Column
-                  key={col.Name}
-                  field={col.Name.toLocaleLowerCase()}
-                  header={col.Name}
-                  dataType="date"
-                  // filterPlaceholder={`Search by ${col}`}
-                  style={{ width: "25%" }}
-                  editor={(options) => textEditor(options)}
-                  body={isLoading ? <Skeleton /> : ""}
-                  // body={(rowData: Record<string, string>) =>
-                  //   dateBodyTemplate(rowData, col.Name)
-                  // }
-                  // filter
-                />
-              );
-            } else {
-              return (
-                <Column
-                  key={col.Name}
-                  field={col.Name.toLocaleLowerCase()}
-                  header={col.Name}
-                  editor={(options) => textEditor(options)}
-                  style={{ width: "25%" }}
-                  body={isLoading ? <Skeleton /> : ""}
-                />
-              );
-            }
-          })}
+          {isLoading || schemaLoading
+            ? dummySchema.map((col) => {
+                return (
+                  <Column
+                    key={col}
+                    field={col.toLocaleLowerCase()}
+                    header={"--------"}
+                    editor={(options) => textEditor(options)}
+                    style={{ width: "25%" }}
+                    body={<Skeleton />}
+                  ></Column>
+                );
+              })
+            : schemaData.map((col) => {
+                if (
+                  col.DataType == "timestamp" ||
+                  col.DataType == "timestamptz"
+                ) {
+                  return (
+                    <Column
+                      key={col.Name}
+                      field={col.Name.toLocaleLowerCase()}
+                      header={col.Name}
+                      dataType="date"
+                      // filterPlaceholder={`Search by ${col}`}
+                      style={{ width: "25%" }}
+                      editor={(options) => textEditor(options)}
+                      body={isLoading ? <Skeleton /> : ""}
+                      // body={(rowData: Record<string, string>) =>
+                      //   dateBodyTemplate(rowData, col.Name)
+                      // }
+                      // filter
+                    />
+                  );
+                } else {
+                  return (
+                    <Column
+                      key={col.Name}
+                      field={col.Name.toLocaleLowerCase()}
+                      header={col.Name}
+                      editor={(options) => textEditor(options)}
+                      style={{ width: "25%" }}
+                      body={isLoading ? <Skeleton /> : ""}
+                    />
+                  );
+                }
+              })}
+
           <Column
             // body={actionBodyTemplate}
             rowEditor={true}
